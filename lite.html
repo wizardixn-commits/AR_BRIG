@@ -151,7 +151,7 @@
                 await new Promise((resolve, reject) => {
                     backgroundImage.onload = () => { bgLoaded = true; resolve(); };
                     backgroundImage.onerror = () => reject(new Error('Не удалось загрузить bg.jpg'));
-                    backgroundImage.src = 'bg.jpg';
+                    backgroundImage.src = 'bg1.jpg';
                 });
 
                 loadingStatus.textContent = 'Загружаем новую нейросеть MediaPipe SelfieSegmentation...';
