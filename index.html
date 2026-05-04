@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Запуск AR...</title>
+    <style>
+        body {
+            background-color: #111;
+            color: white;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            font-family: sans-serif;
+            margin: 0;
+        }
+
+        .loader {
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            border-left-color: #a855f7;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="loader"></div>
+    <p style="margin-top: 1rem; color: #9ca3af;">Анализируем устройство...</p>
+
+    <script>
+        // Функция проверки железа
+        function detectDeviceTier() {
+            // 1. Усиленная проверка на устройства Huawei/Honor (HarmonyOS / EMUI)
+            // Встроенные браузеры могут прятать 'huawei' в User-Agent, поэтому ищем дополнительные маркеры
+            const ua = navigator.userAgent.toLowerCase();
+            const isHuawei = ua.includes('huawei') || 
+                             ua.includes('honor') || 
+                             ua.includes('hmscore') || 
+                             ua.includes('harmony') || 
+                             ua.includes('emui') ||
+                             ua.includes('browser/hw'); // Huawei Browser
+            
+            const isHuaweiVendor = navigator.vendor && navigator.vendor.toLowerCase().includes('huawei');
+
+            if (isHuawei || isHuaweiVendor) {
+                return 'lite';
+            }
+
+            // 1.5. Проверка версии Android и Chrome
+            // EMUI 12 работает на базе Android 10 или 11. MediaPipe Tasks Vision требует более свежих драйверов.
+            const androidMatch = ua.match(/android\s([0-9\.]+)/);
+            if (androidMatch) {
+                const androidVersion = parseFloat(androidMatch[1]);
+                // Android 12 и ниже -> отправляем на Lite
+                if (androidVersion <= 12) return 'lite';
+            }
+
+            const chromeMatch = ua.match(/chrome\/([0-9]+)/);
+            if (chromeMatch) {
+                const chromeVersion = parseInt(chromeMatch[1], 10);
+                // Старые версии Chrome (< 110) могут не поддерживать нужные WebAssembly SIMD инструкции
+                if (chromeVersion < 110) return 'lite';
+            }
+
+            // 2. Поддерживает ли браузер WebAssembly (критично для Pro-версии)
+            const hasWasm = typeof WebAssembly === "object" && typeof WebAssembly.instantiate === "function";
+            if (!hasWasm) return 'lite';
+
+            // 3. Проверка оперативной памяти
+            // Повышаем планку для Pro-версии: отправляем на Lite всех, у кого меньше 6 ГБ ОЗУ.
+            // (iOS и некоторые другие браузеры не отдают deviceMemory, они пропустят эту проверку)
+            if (navigator.deviceMemory && navigator.deviceMemory < 6) {
+                return 'lite';
+            }
+
+            // 4. Проверка количества ядер процессора
+            if (navigator.hardwareConcurrency && navigator.hardwareConcurrency < 4) {
+                return 'lite';
+            }
+
+            // 5. Проверка видеокарты (WebGL)
+            try {
+                const canvas = document.createElement('canvas');
+                const gl = canvas.getContext('webgl2') || canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+                if (!gl) return 'lite';
+                
+                // Проверка на проблемные видеоускорители (Mali GPU, которые часто стоят в Huawei/Honor/MediaTek)
+                const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+                if (debugInfo) {
+                    const renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL).toLowerCase();
+                    if (renderer.includes('mali')) {
+                        return 'lite';
+                    }
+                }
+            } catch (e) {
+                return 'lite';
+            }
+
+            // Если телефон прошел все тесты - он мощный
+            return 'pro';
+        }
+
+        // Выполняем проверку и перенаправляем
+        window.onload = () => {
+            const tier = detectDeviceTier();
+
+            // Небольшая задержка, чтобы браузер успел отрисовать экран загрузки
+            setTimeout(() => {
+                if (tier === 'pro') {
+                    window.location.replace("pro.html");
+                } else {
+                    window.location.replace("lite.html");
+                }
+            }, 100); // 100 миллисекунд
+        };
+    </script>
+</body>
+
+</html>
